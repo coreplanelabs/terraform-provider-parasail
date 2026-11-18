@@ -15,8 +15,8 @@ vars:
   BINARY_NAME: terraform-provider-parasail
   DIST_DIR: dist
   LDFLAGS: >-
-    -X github.com/loewenthal-corp/terraform-provider-parasail/internal/buildinfo.Commit={{.GIT_COMMIT}}
-    -X github.com/loewenthal-corp/terraform-provider-parasail/internal/buildinfo.BuildTime={{.BUILD_TIME}}
+    -X github.com/coreplanelabs/terraform-provider-parasail/internal/buildinfo.Commit={{.GIT_COMMIT}}
+    -X github.com/coreplanelabs/terraform-provider-parasail/internal/buildinfo.BuildTime={{.BUILD_TIME}}
 
 tasks:
   do:
@@ -29,6 +29,8 @@ tasks:
       - task: test
       - task: security
       - task: build
+      - task: lint:workflows
+      - task: release:check
 
   init:
     desc: "Download dependencies and initialize local tool plugins"
@@ -118,8 +120,8 @@ tasks:
     cmds:
       - tofu fmt -recursive examples
 
-  examples:validate:
-    desc: "Validate examples against the locally built provider"
+  dev:setup:
+    desc: "Build the Coreplane provider and create its local CLI configuration"
     deps:
       - build
     cmds:
@@ -128,11 +130,17 @@ tasks:
         cat > .task/opentofu/provider-dev.tfrc <<EOF
         provider_installation {
           dev_overrides {
-            "registry.terraform.io/loewenthal-corp/parasail" = "{{.ROOT_DIR}}/{{.DIST_DIR}}"
+            "registry.terraform.io/coreplanelabs/parasail" = "{{.ROOT_DIR}}/{{.DIST_DIR}}"
           }
           direct {}
         }
         EOF
+
+  examples:validate:
+    desc: "Validate examples against the locally built provider"
+    deps:
+      - dev:setup
+    cmds:
       - |
         for dir in examples/*; do
           if [ -d "$dir" ] && ls "$dir"/*.tf >/dev/null 2>&1; then
@@ -191,3 +199,15 @@ tasks:
     desc: "Remove local build and report artifacts"
     cmds:
       - rm -rf {{.DIST_DIR}} coverage.out test-results.xml .task
+
+  lint:workflows:
+    desc: "Validate GitHub Actions workflows"
+    cmds:
+      - actionlint
+
+  release:check:
+    desc: "Build and verify unsigned Registry artifacts without publication"
+    cmds:
+      - goreleaser check
+      - goreleaser release --snapshot --clean --skip=publish,sign --parallelism 4
+      - python3 scripts/verify-release.py dist --snapshot

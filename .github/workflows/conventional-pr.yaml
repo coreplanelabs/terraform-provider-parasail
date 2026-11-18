@@ -1,8 +1,4 @@
 ---
-#################################################################################
-#                            DO NOT EDIT DIRECTLY.                              #
-# File is managed by Tofu at https://github.com/loewenthal-corp/infrastructure  #
-#################################################################################
 name: conventional-pr
 "on":
   pull_request:
@@ -12,24 +8,23 @@ name: conventional-pr
       - opened
       - edited
       - synchronize
+permissions: {}
+
 jobs:
   lint-pr:
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          app-id: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_APP_ID }}
-          private-key: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_PRIVATE_SIGNING_KEY }}
+          persist-credentials: false
       - uses: CondeNast/conventional-pull-request-action@3ce30fdb4d2beef8b941f23a1114dd8188eba082 # v0.2.0
         env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # to override config-conventional rules, specify a relative path to your rules module, actions/checkout is required for this setting!
-          # commitlintRulesPath: './commitlint.rules.js' # default: undefined
           # if the PR contains a single commit, fail if the commit message and the PR title do not match
-          commitTitleMatch: 'true' # default: 'true'
-          # if you squash merge PRs and enabled "Default to PR title for squash merge commits", you can disable all linting of commits
-          ignoreCommits: 'true' # default: 'false'
+          commitTitleMatch: 'true'
+          # squash merges default to the PR title, so lint the title rather than every commit
+          ignoreCommits: 'true'

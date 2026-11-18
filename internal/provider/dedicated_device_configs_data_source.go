@@ -8,7 +8,7 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	parasail "github.com/loewenthal-corp/terraform-provider-parasail/internal/client"
+	parasail "github.com/coreplanelabs/terraform-provider-parasail/internal/client"
 )
 
 type dedicatedDeviceConfigsDataSource struct {

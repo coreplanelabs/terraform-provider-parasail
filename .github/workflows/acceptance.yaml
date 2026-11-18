@@ -3,57 +3,47 @@ name: acceptance
 
 "on":
   workflow_dispatch:
-  schedule:
-    - cron: "0 13 * * 1-5"
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/acceptance.yaml"
-      - "Taskfile.yaml"
-      - "bin/**"
-      - "cmd/**"
-      - "go.mod"
-      - "go.sum"
-      - "internal/**"
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
-    paths:
-      - ".github/workflows/acceptance.yaml"
-      - "Taskfile.yaml"
-      - "bin/**"
-      - "cmd/**"
-      - "go.mod"
-      - "go.sum"
-      - "internal/**"
+    inputs:
+      mode:
+        description: Live test scope (mutating creates billable deployments)
+        type: choice
+        default: readonly
+        options:
+          - readonly
+          - mutating
 
 permissions:
   contents: read
 
 env:
   CI: "true"
-  GOPRIVATE: github.com/loewenthal-corp/
 
 jobs:
   live:
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'live-acceptance')
-    runs-on: ubuntu-26.04
+    if: github.ref == 'refs/heads/main'
+    runs-on: depot-ubuntu-24.04
+    environment: acceptance
     env:
       PARASAIL_API_KEY: ${{ secrets.PARASAIL_API_KEY }}
+      TEST_MODE: ${{ inputs.mode }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Activate Hermit
         uses: cashapp/activate-hermit@cea9af7913204a965fd488637a8d1811bba2e616 # v1
         with:
           cache: "true"
 
-      - name: Skip without Parasail API key
-        if: env.PARASAIL_API_KEY == ''
-        run: echo "PARASAIL_API_KEY secret is not configured; skipping live acceptance tests."
+      - name: Check Parasail credentials
+        run: test -n "$PARASAIL_API_KEY"
 
       - name: Run live acceptance tests
-        if: env.PARASAIL_API_KEY != ''
-        run: task test:acc
+        run: |
+          if [ "$TEST_MODE" = mutating ]; then
+            task test:acc
+          else
+            task test:acc:readonly
+          fi

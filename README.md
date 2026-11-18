@@ -9,21 +9,63 @@ This repository contains a Terraform (and OpenTofu) provider for Parasail's publ
 Control API. The initial implementation focuses on dedicated model deployments using
 the documented `/api/v1/dedicated` API surface.
 
-Once published, the provider is sourced as `loewenthal-corp/parasail`:
+## Coreplane fork
+
+Coreplane maintains this fork at
+[coreplanelabs/terraform-provider-parasail](https://github.com/coreplanelabs/terraform-provider-parasail).
+[loewenthal-corp/terraform-provider-parasail](https://github.com/loewenthal-corp/terraform-provider-parasail)
+is the upstream source. The fork keeps the upstream history and MPL-2.0 license.
+
+Coreplane builds use the provider address `coreplanelabs/parasail`.
+The provider is not published to the Terraform Registry under that address.
+CI builds the Coreplane source and stores a Linux amd64 binary as a workflow artifact.
+The manual release workflow publishes signed artifacts from `main`.
+
+### Use the Coreplane build before Registry publication
+
+```sh
+git clone https://github.com/coreplanelabs/terraform-provider-parasail.git
+cd terraform-provider-parasail
+source bin/activate-hermit
+task dev:setup
+export TF_CLI_CONFIG_FILE="$PWD/.task/opentofu/provider-dev.tfrc"
+```
+
+`task dev:setup` builds a native binary in `dist/` and writes a CLI configuration
+that maps the Coreplane provider address to that directory.
+Keep `TF_CLI_CONFIG_FILE` set in the shell where you run Terraform or OpenTofu.
+Use this provider requirement in your configuration:
 
 ```hcl
 terraform {
   required_providers {
     parasail = {
-      source  = "loewenthal-corp/parasail"
-      version = ">= 0.1.0"
+      source = "coreplanelabs/parasail"
     }
   }
 }
 ```
 
-Generated provider documentation lives in [docs/](docs/) and is published on the
-Terraform Registry.
+Run `terraform plan` or `tofu plan` with the local override.
+For a configuration that uses only this provider, skip `init`: the Registry does
+not contain the Coreplane provider yet.
+Run `task dev:setup` after source changes to rebuild the binary.
+The CLI configuration applies to any working directory in the same shell.
+
+### Git remotes
+
+Configure each clone so that normal pushes target Coreplane:
+
+```sh
+git remote add upstream https://github.com/loewenthal-corp/terraform-provider-parasail.git
+git config remote.pushDefault origin
+git config push.default current
+```
+
+Fetch changes with `git fetch upstream`.
+Merge `upstream/main` on a branch, keep the Coreplane namespace and workflow
+settings, and submit a PR to this fork.
+CI checks upstream updates through the same tasks as other changes.
 
 ## Development
 
@@ -40,17 +82,21 @@ Provider configuration can come from Terraform configuration or environment vari
 
 ### Acceptance Tests
 
-Live acceptance tests use the Terraform provider test harness and create real
-Parasail dedicated deployments. Put `PARASAIL_API_KEY` in `.env` or export it in
-your shell before running them.
+Ordinary CI runs unit tests without Parasail credentials.
+Live acceptance tests create real deployments and can incur charges.
+The manual `acceptance` workflow runs on `main` and defaults to read-only tests.
+Set `PARASAIL_API_KEY` in the `acceptance` environment before you run it.
+Choose `mutating` only when you intend to create and destroy deployments.
+
+For local live tests, put `PARASAIL_API_KEY` in `.env` or export it:
 
 ```sh
 task test:acc:readonly # read-only support, device, and list checks
 task test:acc          # create, update, import, list, and destroy checks
 ```
 
-The mutating suite uses `wait_for_online = false` to verify dedicated deployment
-lifecycle behavior without waiting for instances to finish serving traffic.
+The mutating suite sets `wait_for_online = false` to check the deployment
+lifecycle without a wait for instances to serve traffic.
 
 ## Example
 
@@ -103,32 +149,31 @@ task docs:validate  # validate only
 `task do` and CI regenerate and validate docs, so edit the schema/examples rather
 than the generated Markdown.
 
-## Releasing & Publishing
+## Releases
 
-Releases are automated:
+The manual [release workflow](.github/workflows/release.yaml) builds from `main`.
+Its tag must match `.release-please-manifest.json` and `internal/buildinfo/buildinfo.go`.
+The first Coreplane release uses `v0.2.1`.
 
-1. [release-please](https://github.com/googleapis/release-please) opens a release
-   PR from Conventional Commits. Merging it tags `vX.Y.Z` and creates a GitHub
-   release.
-2. The `goreleaser` job in [release.yaml](.github/workflows/release.yaml) then
-   builds the provider for all target platforms and attaches the artifacts the
-   Terraform Registry ingests: the per-platform zips, `*_SHA256SUMS`,
-   `*_SHA256SUMS.sig` (GPG detached signature), and `*_manifest.json`.
+The workflow runs the full quality checks, builds 13 platform archives, and signs
+the checksums. It verifies the uploaded archives, Registry manifest, checksums,
+and GPG signature before it publishes the draft GitHub release.
+It refuses to replace a published version.
 
-### One-time setup to publish to the Terraform Registry
+The `release` environment contains the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets.
+Restrict this environment to `main`.
+The public key lives in [keys/parasail.asc](keys/parasail.asc).
+Register that key in the `coreplanelabs` Registry namespace before publication.
 
-1. Make this repository **public**.
-2. Generate a GPG signing key (RSA/DSA, not ECC), then:
-   - Add the **public** key at <https://registry.terraform.io> → *User Settings →
-     Signing Keys*.
-   - Add the **private** key and its passphrase as repository secrets
-     `GPG_PRIVATE_KEY` (ASCII-armored) and `PASSPHRASE`.
-3. On the registry, *Publish → Provider* and select this repo. The registry adds a
-   release webhook and ingests each finalized release automatically.
+Run a release after the version change merges and CI passes:
 
-Provider metadata for the registry lives in
-[`terraform-registry-manifest.json`](terraform-registry-manifest.json)
-(`protocol_versions: ["6.0"]`, terraform-plugin-framework).
+```sh
+gh workflow run release.yaml --repo coreplanelabs/terraform-provider-parasail --ref main -f tag=v0.2.1
+```
 
-Preview the rendered registry pages at
-<https://registry.terraform.io/tools/doc-preview>.
+Publish the repository as `coreplanelabs/parasail` through the public Registry.
+The Registry imports the signed release and each future GitHub release.
+See the [provider publication guide](https://developer.hashicorp.com/terraform/registry/providers/publishing).
+
+`task release:check` builds unsigned snapshot artifacts and verifies the Registry
+file contract without an upload.

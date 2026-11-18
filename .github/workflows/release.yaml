@@ -1,85 +1,112 @@
 ---
+name: release
+
 "on":
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (must match the version in the repository)
+        required: true
+        default: v0.2.1
+        type: string
 
 permissions:
   contents: read
 
-name: release-please
+concurrency:
+  group: provider-release
+  cancel-in-progress: false
 
 jobs:
-  release-please:
-    runs-on: ubuntu-26.04
+  release:
+    if: github.ref == 'refs/heads/main' && github.repository == 'coreplanelabs/terraform-provider-parasail'
+    runs-on: depot-ubuntu-24.04
+    environment: release
     permissions:
       contents: write
-      pull-requests: write
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
-      major: ${{ steps.release.outputs.major }}
-      minor: ${{ steps.release.outputs.minor }}
-      patch: ${{ steps.release.outputs.patch }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
-      - name: Generate a GitHub token
-        id: generate-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
-        with:
-          client-id: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_PRIVATE_SIGNING_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Create or update release PR
-        id: release
-        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
-        with:
-          token: ${{ steps.generate-token.outputs.token }}
-          target-branch: ${{ github.ref_name }}
-
-  # When release-please publishes a tagged release, build, sign, and attach the
-  # provider artifacts the Terraform Registry ingests (zips, SHA256SUMS,
-  # SHA256SUMS.sig, and the manifest).
-  goreleaser:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: write
-    steps:
-      - name: Generate a GitHub token
-        id: generate-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
-        with:
-          client-id: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.LOEWENTHAL_CORPORATION_BOT_PRIVATE_SIGNING_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - name: Checkout code
+      - name: Checkout release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
           fetch-depth: 0
-          token: ${{ steps.generate-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Verify release target
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected vMAJOR.MINOR.PATCH" >&2; exit 1; }
+          python3 - "$RELEASE_TAG" <<'PY'
+          import json, sys
+          version = json.load(open('.release-please-manifest.json'))['.']
+          assert sys.argv[1] == 'v' + version, 'Tag does not match release manifest'
+          PY
+          if gh release view "$RELEASE_TAG" --json isDraft,targetCommitish > .release-draft; then
+            python3 - "$GITHUB_SHA" <<'PYRELEASE'
+          import json, sys
+          release = json.load(open('.release-draft'))
+          assert release['isDraft'], 'Published releases must never be replaced'
+          assert release['targetCommitish'] == sys.argv[1], 'Draft targets a different commit'
+          PYRELEASE
+          fi
+          rm -f .release-draft
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$GITHUB_SHA"
+          fi
 
       - name: Activate Hermit
         uses: cashapp/activate-hermit@cea9af7913204a965fd488637a8d1811bba2e616 # v1
         with:
           cache: "true"
 
-      - name: Import GPG key
+      - name: Check release source
+        run: |
+          task 'do'
+          git diff --exit-code
+
+      - name: Prepare draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          fi
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft --title "$RELEASE_TAG" \
+              --notes 'Coreplane build of the community Parasail Terraform provider. Source: https://github.com/loewenthal-corp/terraform-provider-parasail'
+          fi
+
+      - name: Import release key
         id: import_gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          version: "~> v2"
-          args: release --clean
+      - name: Verify release key identity
         env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+        run: |
+          expected=$(gpg --show-keys --with-colons keys/parasail.asc | awk -F: '$1 == "fpr" { print $10; exit }')
+          test "$GPG_FINGERPRINT" = "$expected"
+
+      - name: Build, sign, and upload draft artifacts
+        run: goreleaser release --clean --parallelism 4
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+      - name: Verify uploaded artifacts and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(mktemp -d)
+          gh release download "$RELEASE_TAG" --dir "$assets"
+          python3 scripts/verify-release.py "$assets"
+          gpg --verify "$assets/terraform-provider-parasail_${RELEASE_TAG#v}_SHA256SUMS.sig" \
+            "$assets/terraform-provider-parasail_${RELEASE_TAG#v}_SHA256SUMS"
+          git diff --exit-code
+          gh release edit "$RELEASE_TAG" --draft=false --latest

@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	parasail "github.com/loewenthal-corp/terraform-provider-parasail/internal/client"
+	parasail "github.com/coreplanelabs/terraform-provider-parasail/internal/client"
 )
 
 const defaultScaleDownAfter = "8h"
