@@ -19,7 +19,7 @@ is the upstream source. The fork keeps the upstream history and MPL-2.0 license.
 Coreplane builds use the provider address `coreplanelabs/parasail`.
 The provider is not published to the Terraform Registry under that address.
 CI builds the Coreplane source and stores a Linux amd64 binary as a workflow artifact.
-CI does not create releases or publish providers.
+The manual release workflow publishes signed artifacts from `main`.
 
 ### Use the Coreplane build before Registry publication
 
@@ -149,13 +149,31 @@ task docs:validate  # validate only
 `task do` and CI regenerate and validate docs, so edit the schema/examples rather
 than the generated Markdown.
 
-## Future Registry publication
+## Releases
 
-This fork contains no release workflow. Publication requires a separate change.
-The existing GoReleaser configuration and `terraform-registry-manifest.json`
-provide the artifact format for that work. `task release:check` validates the
-configuration without a release or upload.
+The manual [release workflow](.github/workflows/release.yaml) builds from `main`.
+Its tag must match `.release-please-manifest.json` and `internal/buildinfo/buildinfo.go`.
+The first Coreplane release uses `v0.2.1`.
 
-Before publication, configure a GPG key, signed release artifacts, and the
-`coreplanelabs/parasail` provider in the Terraform Registry.
-Follow the [Terraform provider publication guide](https://developer.hashicorp.com/terraform/registry/providers/publishing).
+The workflow runs the full quality checks, builds 13 platform archives, and signs
+the checksums. It verifies the uploaded archives, Registry manifest, checksums,
+and GPG signature before it publishes the draft GitHub release.
+It refuses to replace a published version.
+
+The `release` environment contains the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets.
+Restrict this environment to `main`.
+The public key lives in [keys/parasail.asc](keys/parasail.asc).
+Register that key in the `coreplanelabs` Registry namespace before publication.
+
+Run a release after the version change merges and CI passes:
+
+```sh
+gh workflow run release.yaml --repo coreplanelabs/terraform-provider-parasail --ref main -f tag=v0.2.1
+```
+
+Publish the repository as `coreplanelabs/parasail` through the public Registry.
+The Registry imports the signed release and each future GitHub release.
+See the [provider publication guide](https://developer.hashicorp.com/terraform/registry/providers/publishing).
+
+`task release:check` builds unsigned snapshot artifacts and verifies the Registry
+file contract without an upload.
