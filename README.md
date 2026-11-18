@@ -17,11 +17,27 @@ Coreplane maintains this fork at
 is the upstream source. The fork keeps the upstream history and MPL-2.0 license.
 
 Coreplane builds use the provider address `coreplanelabs/parasail`.
-The provider is not published to the Terraform Registry under that address.
+Install the provider from the [Terraform Registry](https://registry.terraform.io/providers/coreplanelabs/parasail/latest).
 CI builds the Coreplane source and stores a Linux amd64 binary as a workflow artifact.
 The manual release workflow publishes signed artifacts from `main`.
 
-### Use the Coreplane build before Registry publication
+### Install from the Registry
+
+```hcl
+terraform {
+  required_providers {
+    parasail = {
+      source  = "registry.terraform.io/coreplanelabs/parasail"
+      version = "~> 0.2.1"
+    }
+  }
+}
+```
+
+Run `terraform init` or `tofu init` to install the signed provider.
+Set `PARASAIL_API_KEY` before you plan or apply deployments.
+
+### Use a local Coreplane build
 
 ```sh
 git clone https://github.com/coreplanelabs/terraform-provider-parasail.git
@@ -40,15 +56,13 @@ Use this provider requirement in your configuration:
 terraform {
   required_providers {
     parasail = {
-      source = "coreplanelabs/parasail"
+      source = "registry.terraform.io/coreplanelabs/parasail"
     }
   }
 }
 ```
 
 Run `terraform plan` or `tofu plan` with the local override.
-For a configuration that uses only this provider, skip `init`: the Registry does
-not contain the Coreplane provider yet.
 Run `task dev:setup` after source changes to rebuild the binary.
 The CLI configuration applies to any working directory in the same shell.
 
@@ -171,8 +185,8 @@ Run a release after the version change merges and CI passes:
 gh workflow run release.yaml --repo coreplanelabs/terraform-provider-parasail --ref main -f tag=v0.2.1
 ```
 
-Publish the repository as `coreplanelabs/parasail` through the public Registry.
-The Registry imports the signed release and each future GitHub release.
+The Registry publishes this repository as `coreplanelabs/parasail`.
+It imports each signed GitHub release through the Terraform Cloud GitHub App.
 See the [provider publication guide](https://developer.hashicorp.com/terraform/registry/providers/publishing).
 
 `task release:check` builds unsigned snapshot artifacts and verifies the Registry
