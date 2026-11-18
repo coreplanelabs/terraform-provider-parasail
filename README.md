@@ -27,7 +27,7 @@ The manual release workflow publishes signed artifacts from `main`.
 terraform {
   required_providers {
     parasail = {
-      source  = "coreplanelabs/parasail"
+      source  = "registry.terraform.io/coreplanelabs/parasail"
       version = "~> 0.2.1"
     }
   }
@@ -56,7 +56,7 @@ Use this provider requirement in your configuration:
 terraform {
   required_providers {
     parasail = {
-      source = "coreplanelabs/parasail"
+      source = "registry.terraform.io/coreplanelabs/parasail"
     }
   }
 }
@@ -186,7 +186,7 @@ gh workflow run release.yaml --repo coreplanelabs/terraform-provider-parasail --
 ```
 
 The Registry publishes this repository as `coreplanelabs/parasail`.
-It imports each signed GitHub release through the release webhook.
+It imports each signed GitHub release through the Terraform Cloud GitHub App.
 See the [provider publication guide](https://developer.hashicorp.com/terraform/registry/providers/publishing).
 
 `task release:check` builds unsigned snapshot artifacts and verifies the Registry
