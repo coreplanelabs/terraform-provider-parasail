@@ -64,7 +64,7 @@ jobs:
 
       - name: Check release source
         run: |
-          task do
+          task 'do'
           git diff --exit-code
 
       - name: Prepare draft release
