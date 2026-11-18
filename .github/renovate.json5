@@ -26,12 +26,6 @@
       "automerge": true
     },
     {
-      "description": "stale.yaml is Tofu-managed; pin bumps belong in the infrastructure template",
-      "matchManagers": ["github-actions"],
-      "matchFileNames": [".github/workflows/stale.yaml"],
-      "enabled": false
-    },
-    {
       "description": "The Terraform plugin libraries are released together and depend on each other",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["github.com/hashicorp/terraform-plugin-**"],

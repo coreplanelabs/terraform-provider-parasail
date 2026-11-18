@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
-	parasail "github.com/loewenthal-corp/terraform-provider-parasail/internal/client"
+	parasail "github.com/coreplanelabs/terraform-provider-parasail/internal/client"
 )
 
 const testAccDedicatedModel = "Qwen/Qwen2.5-7B-Instruct"

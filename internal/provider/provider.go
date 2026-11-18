@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	parasail "github.com/loewenthal-corp/terraform-provider-parasail/internal/client"
+	parasail "github.com/coreplanelabs/terraform-provider-parasail/internal/client"
 )
 
 type apiConfig struct {

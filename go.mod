@@ -1,4 +1,4 @@
-module github.com/loewenthal-corp/terraform-provider-parasail
+module github.com/coreplanelabs/terraform-provider-parasail
 
 go 1.26.0
 

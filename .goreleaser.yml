@@ -15,9 +15,9 @@ builds:
       - -trimpath
     ldflags:
       - "-s -w"
-      - "-X github.com/loewenthal-corp/terraform-provider-parasail/internal/buildinfo.Version={{ .Version }}"
-      - "-X github.com/loewenthal-corp/terraform-provider-parasail/internal/buildinfo.Commit={{ .FullCommit }}"
-      - "-X github.com/loewenthal-corp/terraform-provider-parasail/internal/buildinfo.BuildTime={{ .Date }}"
+      - "-X github.com/coreplanelabs/terraform-provider-parasail/internal/buildinfo.Version={{ .Version }}"
+      - "-X github.com/coreplanelabs/terraform-provider-parasail/internal/buildinfo.Commit={{ .FullCommit }}"
+      - "-X github.com/coreplanelabs/terraform-provider-parasail/internal/buildinfo.BuildTime={{ .Date }}"
     goos:
       - freebsd
       - windows
